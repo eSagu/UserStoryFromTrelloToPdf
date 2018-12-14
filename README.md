@@ -6,7 +6,7 @@ Creates printable PDF story cards from Trello.
 
 Clone this repo.
 Run `pip3 install -r requirements.txt` to install requirements.
-If using ubuntu you may need to run `apt-get install python3-tk` for installing more reuirements.
+If using ubuntu you may need to run `apt-get install python3-tk` for installing more requirements.
 
 
 ## Usage
