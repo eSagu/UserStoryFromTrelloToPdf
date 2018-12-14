@@ -1,0 +1,6 @@
+easygui
+trolly
+tqdm
+awesome-slugify
+markdown2
+weasyprint
