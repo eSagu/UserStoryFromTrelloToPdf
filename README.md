@@ -1,6 +1,6 @@
 # UserStoryFromTrelloToPdf
 
-Creates printable PDF story cards from Trello 
+Creates printable PDF story cards from Trello.
 
 ## Installation
 
