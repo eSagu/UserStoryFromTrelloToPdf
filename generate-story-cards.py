@@ -18,6 +18,27 @@ from datetime import datetime
 from tqdm import tqdm
 from string import Template
 
+def check_card_in_printed_list(card_id, printed_cards_list_file_name):
+    if not os.path.isfile(printed_cards_list_file_name):
+        return False
+
+    with open(printed_cards_list_file_name) as data_file:
+        printed_list = json.load(data_file)
+        return card_id in printed_list
+
+def add_card_to_printed_list(card_id, printed_cards_list_file_name):
+    if not os.path.isfile(printed_cards_list_file_name):
+        printed_list = []
+    else:    
+        with open(printed_cards_list_file_name) as data_file:
+            printed_list = json.load(data_file)
+
+    if not card_id in printed_list:
+        printed_list.append(card_id) 
+
+    with open(printed_cards_list_file_name, 'w') as data_file:
+        json.dump(printed_list, data_file, indent=2)
+
 def select_board(client):
     boards = client.get_boards()
     board_names = list(map(lambda board: '{} [{}]'.format(board.name, board.id), boards))
@@ -40,12 +61,13 @@ def build_card(card_info):
         label_names = []
 
     return {
+        'id': card_info['id'],
         'name': card_info['name'],
         'desc': card_info['desc'].split('---', 1)[0],
         'labels': label_names
     }
 
-def create_story_cards_pdf(client, board_id, list_id, generated_dir):
+def create_story_cards_pdf(client, board_id, list_id, generated_dir, printed_cards_list_file_name):
     bad_cards = []
     board = client.get_board(board_id)
 
@@ -58,7 +80,8 @@ def create_story_cards_pdf(client, board_id, list_id, generated_dir):
         msgbox("No list found!")
         return
 
-    num_pdfs = 0    
+    num_pdfs = 0  
+    skipped_pdfs = 0    
     for card in tqdm(target_list.get_cards()):
         card_info = build_card(card.get_card_information())
 
@@ -66,10 +89,14 @@ def create_story_cards_pdf(client, board_id, list_id, generated_dir):
         if len(card_info['labels']) > 0:
             footer = card_info['labels'][0]
 
-        create_story_card_pdf(card_info['name'], card_info['desc'], footer, generated_dir)
-        num_pdfs = num_pdfs + 1
+        if not check_card_in_printed_list(card_info['id'], printed_cards_list_file_name) or not ynbox('Card "{}" has already been printed, shall I skip this card?'.format(card_info['name'])):
+            create_story_card_pdf(card_info['name'], card_info['desc'], footer, generated_dir)
+            add_card_to_printed_list(card_info['id'], printed_cards_list_file_name)
+            num_pdfs = num_pdfs + 1
+        else:
+            skipped_pdfs = skipped_pdfs + 1
 
-    return num_pdfs
+    return num_pdfs, skipped_pdfs
 
 def get_css():
     return CSS(string='''
@@ -128,6 +155,10 @@ def start_up():
     if not os.path.exists(generated_dir):
         os.makedirs(generated_dir)
 
+    if len(os.listdir(generated_dir + '/')) > 0:
+        if ynbox('Found generated files in target dir, shall I delete them?'):
+            for file in os.listdir(generated_dir + '/'):
+                os.remove(generated_dir + '/' + file)
 
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
@@ -149,16 +180,16 @@ def start_up():
 
     client = trolly.client.Client(config['apiKey'], config['serverToken'])
 
-    return current_dir, generated_dir, client
+    return current_dir, generated_dir, client, config_dir +  '/printed_cards.json'
 
 def main():
     msgbox('Welcome to the eSagu Trello card printer')
-    current_dir, generated_dir, client = start_up()
+    current_dir, generated_dir, client, printed_cards_list_file_name = start_up()
 
     board_id = select_board(client)
     list_id = select_list(client, board_id)
-    num_pdfs = create_story_cards_pdf(client, board_id, list_id, generated_dir)
-    msgbox('Created {} PDF file(s) in "{}".'.format(num_pdfs, generated_dir))
+    num_pdfs, skipped_pdfs = create_story_cards_pdf(client, board_id, list_id, generated_dir, printed_cards_list_file_name)
+    msgbox('Created {} PDF file(s) in "{}", skipped {} cards.'.format(num_pdfs, generated_dir, skipped_pdfs))
 
 if __name__ == "__main__":
     main()
